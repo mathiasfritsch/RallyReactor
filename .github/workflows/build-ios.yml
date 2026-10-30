@@ -1,0 +1,53 @@
+name: Build unsigned iOS POC
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Build unsigned app
+        run: |
+          xcodebuild \
+            -project PocApp.xcodeproj \
+            -scheme PocApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH=$(find build/Build/Products -type d -name "PocApp.app" | head -n 1)
+          test -n "$APP_PATH"
+
+          mkdir -p ipa/Payload
+          cp -R "$APP_PATH" ipa/Payload/
+
+          cd ipa
+          zip -qry ../PocApp-unsigned.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PocApp-unsigned-ipa
+          path: PocApp-unsigned.ipa
+          if-no-files-found: error
